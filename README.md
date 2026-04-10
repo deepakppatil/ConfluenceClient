@@ -1,4 +1,4 @@
-# `async-confluence-client` – Throttling‑safe, search‑ready, and checkpoint‑aware Confluence REST client
+# `Confluence-client` – Throttling‑safe, search‑ready, and checkpoint‑aware Confluence  client
 
 This repository provides an **async `aiohttp`‑based Confluence REST client** designed specifically to avoid overloading your Confluence server while still enabling large‑scale page loading, CQL search, and attachment handling. The implementation honors Confluence’s rate‑limiting behavior, including `Retry‑After`, exponential backoff with jitter, and proactive throttling based on `X‑RateLimit‑*` headers, and offers:
 
