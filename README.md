@@ -1,6 +1,6 @@
-# `Confluence-client` – Throttling‑safe, search‑ready, and checkpoint‑aware Confluence  client
+# `confluence-client` – Throttling‑safe, search‑ready, and checkpoint‑aware Confluence client
 
-This repository provides an **async `aiohttp`‑based Confluence REST client** designed specifically to avoid overloading your Confluence server while still enabling large‑scale page loading, CQL search, and attachment handling. The implementation honors Confluence’s rate‑limiting behavior, including `Retry‑After`, exponential backoff with jitter, and proactive throttling based on `X‑RateLimit‑*` headers, and offers:
+This repository provides **two battle‑tested Confluence REST client implementations**—one async (`aiohttp`‑based) and one synchronous (SDK‑based)—both designed specifically to avoid overloading your Confluence server while still enabling large‑scale page loading, CQL search, and attachment handling. Both implementations honor Confluence's rate‑limiting behavior, including `Retry‑After`, exponential backoff with jitter, and proactive throttling based on `X‑RateLimit‑*` headers, and offer:
 
 - safe pagination,
 - CQL search with `cursor`‑based continuation,
@@ -13,39 +13,41 @@ Atlassian’s Confluence Cloud REST API documents rate‑limiting headers such a
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/async-confluence-client/tests.yml?branch=main&logo=github)](https://github.com/yourusername/async-confluence-client/actions)
-[![PyPI version](https://img.shields.io/pypi/v/async-confluence-client.svg?logo=pypi)](https://pypi.org/project/async-confluence-client/)
-[![async/await](https://img.shields.io/badge/async-await-green.svg)](https://docs.python.org/3/library/asyncio.html)
-[![aiohttp](https://img.shields.io/badge/built--with-aiohttp-blue.svg)](https://docs.aiohttp.org/)
-[![codecov](https://img.shields.io/codecov/c/github/yourusername/async-confluence-client?logo=codecov)](https://codecov.io/gh/yourusername/async-confluence-client)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/confluence-client/tests.yml?branch=main&logo=github)](https://github.com/yourusername/confluence-client/actions)
+[![PyPI version](https://img.shields.io/pypi/v/confluence-client.svg?logo=pypi)](https://pypi.org/project/confluence-client/)
+[![Implementations: Async + SDK](https://img.shields.io/badge/Implementations-Async%20%2B%20SDK-green.svg)](#2-implementation-options)
+[![Concurrency: aiohttp + threading](https://img.shields.io/badge/Concurrency-aiohttp%20%2B%20threading-blue.svg)](#2-implementation-options)
+[![SDK compatible](https://img.shields.io/badge/SDK--compatible-atlassian--python--api-orange.svg)](https://atlassian-python-api.readthedocs.io/)
+[![codecov](https://img.shields.io/codecov/c/github/yourusername/confluence-client?logo=codecov)](https://codecov.io/gh/yourusername/confluence-client)
 ***
 
 ## Table of contents
 
 1. [Overview and design goals](#1-overview-and-design-goals)
-2. [What this client does](#2-what-this-client-does)
-3. [Key components](#3-key-components)
-4. [Concepts and terminology](#4-concepts-and-terminology)
-5. [Installation and dependencies](#5-installation-and-dependencies)
-6. [Quick start](#6-quick-start)
-7. [Detailed usage](#7-detailed-usage)
-    - 7.1 Initialize and connect
-    - 7.2 Configuring rate‑limit behavior
-    - 7.3 Spaces
-    - 7.4 Pages and pagination
-    - 7.5 CQL search
-    - 7.6 Attachments
-    - 7.7 Checkpointing and resume
-    - 7.8 Logging and events
-8. [Retry and throttling strategy](#8-retry-and-throttling-strategy)
-9. [Error handling and observability](#9-error-handling-and-observability)
-10. [Performance and tuning](#10-performance-and-tuning)
-11. [Configuration reference](#11-configuration-reference)
-12. [Security and authentication](#12-security-and-authentication)
-13. [Extending the client](#13-extending-the-client)
-14. [Testing and validation](#14-testing-and-validation)
-15. [Limitations and caveats](#15-limitations-and-caveats)
-16. [License and attribution](#16-license-and-attribution)
+2. [Implementation options](#2-implementation-options)
+3. [What this client does](#3-what-this-client-does)
+4. [Key components](#4-key-components)
+5. [Concepts and terminology](#5-concepts-and-terminology)
+6. [Installation and dependencies](#6-installation-and-dependencies)
+7. [Quick start](#7-quick-start)
+8. [Detailed usage](#8-detailed-usage)
+    - 8.1 Initialize and connect
+    - 8.2 Configuring rate‑limit behavior
+    - 8.3 Spaces
+    - 8.4 Pages and pagination
+    - 8.5 CQL search
+    - 8.6 Attachments
+    - 8.7 Checkpointing and resume
+    - 8.8 Logging and events
+9. [Retry and throttling strategy](#9-retry-and-throttling-strategy)
+10. [Error handling and observability](#10-error-handling-and-observability)
+11. [Performance and tuning](#11-performance-and-tuning)
+12. [Configuration reference](#12-configuration-reference)
+13. [Security and authentication](#13-security-and-authentication)
+14. [Extending the client](#14-extending-the-client)
+15. [Testing and validation](#15-testing-and-validation)
+16. [Limitations and caveats](#16-limitations-and-caveats)
+17. [License and attribution](#17-license-and-attribution)
 
 ***
 
@@ -87,14 +89,72 @@ It **is** a low‑level safe HTTP client meant to be composed into your own sync
 
 ***
 
-## 2. What this client does
+## 2. Implementation options
 
-The client offers:
+This library provides **two implementations** to suit different application patterns:
+
+### 2.1 Async client (`AsyncSafeConfluenceClient`)
+
+- **Use when**: Your application uses `asyncio` and you want to handle many concurrent requests with minimal threads.
+- **Concurrency model**: `asyncio.Semaphore` + cooperative multitasking
+- **HTTP library**: `aiohttp` (async/await based)
+- **Best for**: FastAPI, async scripts, applications that already use `asyncio`
+- **Import**: `from confluence_client.client import AsyncSafeConfluenceClient`
+
+**Example:**
+```python
+async with AsyncSafeConfluenceClient(
+    base_url="https://your-domain.atlassian.net",
+    username="user@example.com",
+    token="api-token",
+) as client:
+    pages = await client.get_all_pages_from_space("ENG")
+```
+
+### 2.2 SDK client (`SafeConfluenceSdkClient`)
+
+- **Use when**: Your application is synchronous or you prefer the `atlassian-python-api` SDK's convenience methods.
+- **Concurrency model**: `threading.BoundedSemaphore` + thread pool
+- **HTTP library**: `atlassian` SDK (wraps `requests`)
+- **Best for**: Existing codebases using `atlassian` SDK, synchronous scripts, simpler integration
+- **Import**: `from confluence_client.sdk_client import SafeConfluenceSdkClient`
+
+**Example:**
+```python
+client = SafeConfluenceSdkClient(
+    url="https://your-domain.atlassian.net",
+    username="user@example.com",
+    token="api-token",
+)
+pages = client.get_all_pages_from_space("ENG")
+client.close()
+```
+
+### 2.3 Comparison
+
+| Feature | Async | SDK |
+| :-- | :-- | :-- |
+| Concurrency | `asyncio.Semaphore` | `ThreadPoolExecutor` + threading |
+| HTTP library | `aiohttp` | `requests` (via `atlassian`) |
+| API style | `async`/`await` | Synchronous |
+| Thread count | Single (event loop) | Configurable (`max_workers`) |
+| Rate limiting | Proactive header‑based + min_request_interval | Proactive header‑based + min_request_interval |
+| Best for | Concurrent, high-throughput workflows | Simpler, sync-compatible codebases |
+| Checkpointing | ✓ Supported | ✓ Supported |
+| Structured logging | ✓ JSON events | ✓ JSON events |
+
+Both implementations support the full feature set: **pagination, CQL search, attachments, checkpointing, and structured logging**.
+
+***
+
+## 3. What this client does
+
+The clients offer:
 
 
 | Feature | Description |
 | :-- | :-- |
-| Bounded concurrency | Maximum concurrent HTTP requests controlled by an `asyncio.Semaphore`. |
+| Bounded concurrency | Maximum concurrent HTTP requests controlled by `asyncio.Semaphore` (async) or `threading.BoundedSemaphore` (SDK). |
 | Global pacing | A global pacing clock enforces `min_request_interval_seconds` between requests. |
 | `Retry‑After` handling | `Retry‑After` and `retry‑after` headers are honored directly. |
 | Exponential backoff with jitter | On 429/50x and transport errors, the client sleeps with `backoff_factor × 2^retry` plus jitter. |
@@ -145,9 +205,53 @@ Major behavioral building blocks:
 
 ***
 
-## 4. Concepts and terminology
+## 4. Key components
 
-### 4.1 Tokens and rate limits
+### Async implementation
+
+The main async class is:
+
+```python
+class AsyncSafeConfluenceClient:
+    ...
+```
+
+Configuration for async uses `AsyncConfluenceRateLimitConfig` with parameters like `max_concurrency`, `page_batch_size`, etc.
+
+### SDK implementation
+
+The main SDK class is:
+
+```python
+class SafeConfluenceSdkClient:
+    ...
+```
+
+Configuration for SDK uses `ConfluenceRateLimitConfig` with parameters like `max_workers`, `page_batch_size`, etc.
+
+### Shared behavioral building blocks
+
+Both implementations share these core patterns:
+
+1. **Concurrency Control**
+    - Async: `asyncio.Semaphore` limits concurrent requests
+    - SDK: `threading.BoundedSemaphore` with thread pool limits concurrent threads
+2. **Global Pacing Lock**
+    - Enforces minimum spacing between requests via `min_request_interval_seconds`
+3. **Header‑Based Throttling**
+    - Proactively reads `Retry‑After`, `X‑RateLimit‑*` headers and stalls the pacing clock
+4. **Exponential Backoff with Jitter**
+    - Computes `backoff_factor × 2^(retry_number-1)` plus random jitter, capped at `max_backoff_seconds`
+5. **Checkpointing (JSON‑based)**
+    - Records `start` offsets and `done` flags per crawl key for resume support
+6. **Structured Logging**
+    - All throttle, retry, and error events logged as JSON for observability
+
+***
+
+## 5. Concepts and terminology
+
+### 5.1 Tokens and rate limits
 
 - `Retry‑After` / `retry‑after`
 Seconds you should wait before retrying; the client will sleep this many seconds plus jitter.[^1]
@@ -157,7 +261,7 @@ How many tokens you have left in the current window; if below `low_token_thresho
 Periodic refill information that can be used to compute a “token refill time” if `Retry‑After` is missing.[^1]
 
 
-### 4.2 Pagination and `cursor`
+### 5.2 Pagination and `cursor`
 
 Confluence uses:
 
@@ -171,7 +275,7 @@ This client exposes:
 
 Both honor `page_batch_size` and `cql_batch_size` settings from the config, and both support `resume` mode backed by checkpoint files.
 
-### 4.3 Checkpointing and resume
+### 5.3 Checkpointing and resume
 
 - A **checkpoint key** is a string that identifies a particular crawl, such as `"pages:ENG:page"` or `"cql:my_query"`.
 - The client stores:
@@ -181,7 +285,7 @@ Both honor `page_batch_size` and `cql_batch_size` settings from the config, and 
 
 Checkpointing is **file‑based** (JSON); there is no built‑in database or distributed coordination.
 
-### 4.4 Logging and events
+### 5.4 Logging and events
 
 Every important throttling, retry, or error decision is logged as a structured entry:
 
@@ -197,50 +301,159 @@ This lets you:
 
 ***
 
-## 5. Installation and dependencies
+## 6. Installation and dependencies
 
-### 5.1 Dependencies
+### 6.1 Dependencies
 
-This client requires:
+This library supports two implementations with different dependencies:
 
-- Python ≥ 3.8
-- `aiohttp` for async HTTP
+#### Async implementation
+
+Required:
+- Python ≥ 3.9
+- `aiohttp` ≥ 3.8.0
 
 Example `requirements.txt`:
+```txt
+aiohttp>=3.8.0
+pydantic>=2.0.0
+```
+
+#### SDK implementation
+
+Required:
+- Python ≥ 3.9
+- `atlassian-python-api` (wraps `requests`)
+- `pydantic` for configuration
+
+Example `requirements.txt`:
+```txt
+atlassian-python-api>=3.0.0
+pydantic>=2.0.0
+```
+
+#### Installing both implementations
+
+To support both async and SDK usage in your project:
 
 ```txt
 aiohttp>=3.8.0
+atlassian-python-api>=3.0.0
+pydantic>=2.0.0
 ```
 
-There is **no dependency** on the `atlassian-python-api` SDK; this client uses raw REST calls.
+### 6.2 Installing into your project
 
-### 5.2 Installing into your project
-
-Clone or copy the module into your project, for example:
+Install the package:
 
 ```bash
-mkdir -p myapp/confluence_client
-cp async_confluence_client.py myapp/confluence_client/__init__.py
+pip install -e .
 ```
 
-Then in your code:
+Or manually integrate the modules:
+
+```bash
+# Copy both implementations
+cp src/confluence_client/client.py myapp/confluence_client/
+cp src/confluence_client/sdk_client.py myapp/confluence_client/
+```
+
+Then import what you need:
 
 ```python
-from myapp.confluence_client import AsyncSafeConfluenceClient, AsyncConfluenceRateLimitConfig
+# Async implementation
+from confluence_client.client import AsyncSafeConfluenceClient, AsyncConfluenceRateLimitConfig
+
+# SDK implementation
+from confluence_client.sdk_client import SafeConfluenceSdkClient, ConfluenceRateLimitConfig
 ```
 
 
 ***
 
-## 6. Quick start
+## 7. Quick start
 
-### 6.1 Minimal example
+### 7.1 Async implementation (minimal example)
+
+```python
+import asyncio
+from confluence_client.client import AsyncSafeConfluenceClient, AsyncConfluenceRateLimitConfig
+
+async def main():
+    config = AsyncConfluenceRateLimitConfig(
+        max_concurrency=2,
+        page_batch_size=25,
+    )
+
+    async with AsyncSafeConfluenceClient(
+        base_url="https://your-domain.atlassian.net",
+        username="you@example.com",
+        token="your-api-token",
+        config=config,
+    ) as client:
+        # Fetch a space
+        space = await client.get_space("ENG")
+        print("Space:", space.get("name"))
+
+        # Get all pages
+        pages = await client.get_all_pages_from_space("ENG", limit=50)
+        print(f"Pages: {len(pages)}")
+
+        # CQL search
+        hits = await client.cql_search(
+            'space = "ENG" AND type = page',
+            limit=20,
+        )
+        print(f"Search hits: {len(hits)}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### 7.2 SDK implementation (minimal example)
+
+```python
+from confluence_client.sdk_client import SafeConfluenceSdkClient, ConfluenceRateLimitConfig
+
+config = ConfluenceRateLimitConfig(
+    max_workers=2,
+    page_batch_size=25,
+)
+
+client = SafeConfluenceSdkClient(
+    url="https://your-domain.atlassian.net",
+    username="you@example.com",
+    token="your-api-token",
+    config=config,
+)
+
+try:
+    # Fetch a space
+    space = client.get_space("ENG")
+    print("Space:", space.get("name"))
+
+    # Get all pages
+    pages = client.get_all_pages_from_space("ENG", limit=50)
+    print(f"Pages: {len(pages)}")
+
+    # CQL search
+    hits = client.cql_search(
+        'space = "ENG" AND type = page',
+        limit=20,
+    )
+    print(f"Search hits: {len(hits)}")
+
+finally:
+    client.close()
+```
+
+### 7.3 Extended async example
 
 ```python
 import asyncio
 import logging
 
-from myapp.confluence_client import AsyncSafeConfluenceClient, AsyncConfluenceRateLimitConfig
+from confluence_client.client import AsyncSafeConfluenceClient, AsyncConfluenceRateLimitConfig
 
 
 async def main():
@@ -264,7 +477,7 @@ async def main():
     )
 
     async with AsyncSafeConfluenceClient(
-        base_url="https://your-domain.atlassian.net/wiki",
+        base_url="https://your-domain.atlassian.net",
         username="you@example.com",
         token="your-api-token",
         config=config,
@@ -298,7 +511,7 @@ async def main():
 
         # Download an attachment
         if attachments.get("results"):
-            first = attachments["results"][^0]
+            first = attachments["results"][0]
             path = await client.download_attachment(
                 page_id="123456",
                 attachment_id=first["id"],
@@ -314,11 +527,15 @@ if __name__ == "__main__":
 
 ***
 
-## 7. Detailed usage
+## 8. Detailed usage
 
-### 7.1 Initialize and connect
+### 8.1 Initialize and connect
+
+#### Async client
 
 ```python
+from confluence_client.client import AsyncSafeConfluenceClient, AsyncConfluenceRateLimitConfig
+
 config = AsyncConfluenceRateLimitConfig(
     max_concurrency=2,
     page_batch_size=25,
@@ -327,7 +544,7 @@ config = AsyncConfluenceRateLimitConfig(
 )
 
 async with AsyncSafeConfluenceClient(
-    base_url="https://your-domain.atlassian.net/wiki",
+    base_url="https://your-domain.atlassian.net",
     username="you@example.com",
     token="your-api-token",
     config=config,
@@ -335,22 +552,45 @@ async with AsyncSafeConfluenceClient(
     ...
 ```
 
-- `base_url` must not end with a trailing slash.
+#### SDK client
+
+```python
+from confluence_client.sdk_client import SafeConfluenceSdkClient, ConfluenceRateLimitConfig
+
+config = ConfluenceRateLimitConfig(
+    max_workers=2,
+    page_batch_size=25,
+    ...
+    checkpoint_file="confluence_checkpoint.json",
+)
+
+client = SafeConfluenceSdkClient(
+    url="https://your-domain.atlassian.net",
+    username="you@example.com",
+    token="your-api-token",
+    config=config,
+)
+
+try:
+    ...
+finally:
+    client.close()
+```
+
+**Connection notes:**
+
+- `base_url` (async) or `url` (SDK) must not end with a trailing slash.
 - You can use:
     - `username` + `token` (API token),
     - `username` + `password` (if your instance allows it),
     - or `bearer_token` for OAuth/Bearer schemes.
 
-The client uses `aiohttp.ClientSession` internally, which is configured with:
-
-- a fixed timeout,
-- optional SSL verification,
-- and the chosen auth method.
+The async client uses `aiohttp.ClientSession` internally, which is configured with timeout and SSL verification. The SDK client wraps the `atlassian` library's `Confluence` class.
 
 
-### 7.2 Configuring rate‑limit behavior
+### 8.2 Configuring rate‑limit behavior
 
-`AsyncConfluenceRateLimitConfig` fields:
+#### Async: `AsyncConfluenceRateLimitConfig`
 
 
 | Field | Default | Meaning |
@@ -368,136 +608,147 @@ The client uses `aiohttp.ClientSession` internally, which is configured with:
 | `timeout_seconds` | 60 | `aiohttp` timeout. |
 | `checkpoint_file` | `confluence_checkpoint.json` | Path to checkpoint JSON file. |
 
-Tuning guidance:
-
-- Start with `max_concurrency` = 1–2 for a production Confluence instance.
+- Start with `max_concurrency` (async) or `max_workers` (SDK) = 1–2 for a production Confluence instance.
 - Increase only after observing that the server is stable and not hitting 429s.
-- Lower `min_request_interval_seconds` only if you are sure your instance and network can handle it (e.g., 0.1–0.25).
+- Lower `min_request_interval_seconds` only if you are sure your instance can handle it (e.g., 0.1–0.25).
+
+#### SDK: `ConfluenceRateLimitConfig`
+
+Same fields as above, but used with `SafeConfluenceSdkClient`. Replace `max_concurrency` with `max_workers` for thread pool sizing.
 
 
-### 7.3 Spaces
+### 8.3 Spaces
 
-#### `get_space(space_key, expand=None)`
-
-Retrieves a single space, optionally expanded.
+#### Async: `get_space(space_key, expand=None)`
 
 ```python
 space = await client.get_space("ENG", expand="description")
-print(space["name"], space.get("description"))
+print(space["name"])
 ```
 
-Maps to:
-
-```bash
-GET /rest/api/space/{spaceKey}
-```
-
-with optional `expand` query parameter.[^4]
-
-#### `list_spaces(limit=25, start=0, expand=None)`
-
-Fetches a page of spaces:
+#### SDK: `get_space(space_key, expand=None)`
 
 ```python
-page = await client.list_spaces(limit=50)
-for s in page.get("results", []):
-    print(s["key"], s["name"])
+space = client.get_space("ENG", expand="description")
+print(space["name"])
 ```
 
-This is the building block for scanning all spaces if needed.
 
-***
-
-### 7.4 Pages and pagination
-
-#### `get_page_by_id(page_id, expand=..., status=None, version=None)`
+#### Async: `list_spaces(limit=25, start=0, expand=None)`
 
 ```python
-page = await client.get_page_by_id("123456", expand="body.storage,version,space")
+result = await client.list_spaces(limit=50)
+for space in result.get("results", []):
+    print(space["key"], space["name"])
+```
+
+#### SDK: `list_spaces(limit=25, start=0, expand=None)`
+
+```python
+result = client.list_spaces(limit=50)
+for space in result.get("results", []):
+    print(space["key"], space["name"])
+```
+
+
+### 8.4 Pages and pagination
+
+#### Async: Fetch a single page
+
+```python
+page = await client.get_page_by_id(
+    page_id="123456",
+    expand="body.storage,version,space"
+)
 print(page["title"])
 ```
 
-Maps to:
+#### SDK: Fetch a single page
 
-```bash
-GET /rest/api/content/{id}
+```python
+page = client.get_page_by_id(
+    page_id="123456",
+    expand="body.storage,version,space"
+)
+print(page["title"])
 ```
 
-with `expand`, `status`, and `version` as query params.
 
-#### `iter_all_pages_from_space(..., resume=False, checkpoint_key=None)`
-
-Asynchronous generator that pages over `start`/`limit`:
+#### Async: Paginate all pages from a space
 
 ```python
 async for page in client.iter_all_pages_from_space(
-    "ENG",
-    expand=None,
-    status="current",
+    space_key="ENG",
+    expand="version",
     content_type="page",
-    resume=True,
-    checkpoint_key="pages:ENG:page",
+    resume=True,  # resume from checkpoint if interrupted
 ):
-    ...
+    print(page["id"], page["title"])
 ```
 
-- `resume=True` reads `checkpoint_file` and resumes from the last `start` offset.
-- `checkpoint_key` defaults to `"pages:{space_key}:{content_type}"`.
-
-This is the safest way to crawl a large space, because it:
-
-- respects `page_batch_size`,
-- writes checkpoints after each page batch,
-- and can be interrupted and restarted.
-
-
-#### `get_all_pages_from_space(..., resume=False, checkpoint_key=None)`
-
-Convenience method that consumes the async iterator into a list:
+Or collect all at once:
 
 ```python
 pages = await client.get_all_pages_from_space(
     "ENG",
-    expand=None,
     status="current",
-    limit=1000,
+    limit=100,
 )
 ```
 
-- `limit` stops early if you only want a sample.
-- `resume` and `checkpoint_key` behave exactly as in the iterator method.
-
-
-#### `load_page_details_for_space(...)`
-
-First retrieves page stubs, then loads full details in parallel, bounded by `max_concurrency`:
+#### SDK: Paginate all pages from a space
 
 ```python
-details = await client.load_page_details_for_space(
+for page in client.iter_all_pages_from_space(
+    space_key="ENG",
+    expand="version",
+    content_type="page",
+    resume=True,
+):
+    print(page["id"], page["title"])
+```
+
+Or collect all at once:
+
+```python
+pages = client.get_all_pages_from_space(
     "ENG",
-    page_expand="body.storage,version,space",
     status="current",
-    limit=50,
+    limit=100,
 )
 ```
 
-- This is very useful for extracting full page bodies when you only need bodies for a subset of pages.
 
-***
+#### Async: Load page details with full body
 
-### 7.5 CQL search
-
-Confluence Cloud exposes CQL‑based search via:
-
-```bash
-GET /rest/api/search
+```python
+pages = await client.load_page_details_for_space(
+    space_key="ENG",
+    page_expand="body.storage,version",
+    status="current",
+)
+for page in pages:
+    print(page["title"], "body:", page["body"]["storage"]["value"][:100])
 ```
 
-with `cql`, `limit`, and `cursor` parameters.[^6][^3]
+#### SDK: Load page details with full body
 
-#### `cql_search(cql, limit=None, expand=None, cqlcontext=None)`
+```python
+pages = client.load_page_details_for_space(
+    space_key="ENG",
+    page_expand="body.storage,version",
+    status="current",
+)
+for page in pages:
+    print(page["title"], "body:", page["body"]["storage"]["value"][:100])
+```
 
-Synchronous‑style wrapper that returns a list:
+
+### 8.5 CQL search
+
+#### Async: Basic CQL search
+
+#### Async: Basic CQL search
 
 ```python
 hits = await client.cql_search(
@@ -506,7 +757,234 @@ hits = await client.cql_search(
 )
 ```
 
-- Internally uses `cursor` to continue until the requested `limit` is
+#### SDK: Basic CQL search
+
+```python
+hits = client.cql_search(
+    'space = "ENG" AND type = page ORDER BY lastmodified DESC',
+    limit=100,
+)
+```
+
+Both use cursor-based continuation and checkpoint support.
+
+
+### 8.6 Attachments
+
+#### Async: `list_attachments(page_id, start=0, limit=None, expand=None)`
+
+```python
+attachments = await client.list_attachments(page_id="123456")
+for att in attachments.get("results", []):
+    print(att["title"], att["id"])
+```
+
+#### SDK: `list_attachments(page_id, start=0, limit=None, expand=None)`
+
+```python
+attachments = client.list_attachments(page_id="123456")
+for att in attachments.get("results", []):
+    print(att["title"], att["id"])
+```
+
+
+#### Async: `get_attachment_download_url(page_id, attachment_id)`
+
+```python
+url = await client.get_attachment_download_url(
+    page_id="123456",
+    attachment_id="att_id"
+)
+print("Download URL:", url)
+```
+
+#### SDK: `get_attachment_download_url(page_id, attachment_id)`
+
+```python
+url = client.get_attachment_download_url(
+    page_id="123456",
+    attachment_id="att_id"
+)
+print("Download URL:", url)
+```
+
+
+#### Async: `download_attachment(page_id, attachment_id, destination, filename=None, chunk_size=...)`
+
+```python
+path = await client.download_attachment(
+    page_id="123456",
+    attachment_id="att_id",
+    destination="./downloads",
+    filename="custom_name.pdf",
+)
+print("Downloaded to:", path)
+```
+
+#### SDK: `download_attachment(page_id, attachment_id, destination, filename=None, chunk_size=...)`
+
+```python
+path = client.download_attachment(
+    page_id="123456",
+    attachment_id="att_id",
+    destination="./downloads",
+    filename="custom_name.pdf",
+)
+print("Downloaded to:", path)
+```
+
+
+### 8.7 Checkpointing and resume
+
+#### Async: Using checkpoints
+
+```python
+# Iterate with checkpoint support
+async for page in client.iter_all_pages_from_space("ENG", resume=True):
+    print(page["id"])
+
+# On resume, the client reads the checkpoint and picks up where it left off
+```
+
+#### SDK: Using checkpoints
+
+```python
+# Iterate with checkpoint support
+for page in client.iter_all_pages_from_space("ENG", resume=True):
+    print(page["id"])
+
+# On resume, the client reads the checkpoint and picks up where it left off
+```
+
+**Checkpoint methods (both implementations):**
+
+```python
+# Load checkpoint
+checkpoint = client.load_checkpoint()
+
+# Update a checkpoint key
+client.update_checkpoint("pages:ENG:page", {"start": 100, "done": False})
+
+# Clear a specific key or all checkpoints
+client.clear_checkpoint("pages:ENG:page")
+client.clear_checkpoint()  # Clears all
+```
+
+
+### 8.8 Logging and events
+
+Both implementations log all important events (throttles, retries, errors) as structured JSON entries.
+
+#### Async: Structured logging
+
+```python
+import logging
+import json
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("safe_confluence_async")
+
+# Logs appear as JSON entries like:
+# {"event": "throttle_applied", "sleep_seconds": 2.1, "reason": "low_remaining", ...}
+```
+
+#### SDK: Structured logging
+
+```python
+import logging
+import json
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("safe_confluence_sdk")
+
+# Logs appear as JSON entries like:
+# {"event": "throttle_applied", "sleep_seconds": 2.1, "reason": "low_remaining", ...}
+```
+
+These logs are useful for:
+
+- Observability: Chart when the client is throttled
+- Debugging: Replay why a crawl slowed down
+- Alerting: Detect repeated 429s or transport errors
+
+***
+
+## 9. Retry and throttling strategy
+
+This applies to **both async and SDK implementations**.
+
+### 9.1 Retry logic
+
+When a request fails with 429 (Too Many Requests), 500, 502, 503, or 504, the client:
+
+1. Extracts `Retry-After` header if present
+2. Computes exponential backoff: `backoff_factor × 2^(retry_number-1)` + jitter
+3. Sleeps for the computed delay
+4. Retries the request
+5. Fails permanently after `max_retries` attempts
+
+### 9.2 Proactive throttling
+
+Even before hitting 429, the client watches:
+
+- `X-RateLimit-Remaining`: If below `low_token_threshold`, the client waits
+- `X-RateLimit-FillRate` / `X-RateLimit-Interval-Seconds`: Used to estimate token refill time
+
+This **prevents** exhausting the rate limit instead of just reacting to 429s.
+
+### 9.3 Global pacing
+
+Every request respects `min_request_interval_seconds`, ensuring bursty traffic is smoothed into a steady stream.
+
+***
+
+## 10. Error handling and observability
+
+Both implementations raise on HTTP errors, transport errors, and resource not found (404):
+
+```python
+from requests import HTTPError
+
+try:
+    page = await client.get_page_by_id("nonexistent")
+except HTTPError as e:
+    print("Error:", e)
+```
+
+All errors are logged as JSON events before being raised, so you can replay the sequence of events leading up to the failure.
+
+***
+
+## 11. Performance and tuning
+
+### 11.1 Async  client tuning
+
+- **`max_concurrency`**: Control how many requests are in-flight simultaneously
+  - Start with 2–3, increase gradually after monitoring the instance
+- **`min_request_interval_seconds`**: Globally smooth out traffic  
+  - 0.25 sec is conservative; 0.1 sec is aggressive
+- **`page_batch_size` / `cql_batch_size`**: How many items per API page
+  - Larger batches = fewer API calls but higher latency per call
+  - Confluence caps at 100 for pages, 25–50 for CQL
+
+### 11.2 SDK client tuning
+
+- **`max_workers`**: Number of concurrent threads in the pool
+  - Start with 2–3; threads are cheaper than you think but still bounded
+- **`min_request_interval_seconds`**: Same as async
+- **`page_batch_size` / `cql_batch_size`**: Same as async
+
+### 11.3 General guidance
+
+- Monitor `X-RateLimit-Remaining` in logs to detect if you are running out of tokens
+- Use checkpoints for large crawls so you can resume if interrupted
+- Run pilot tests on a staging instance before running large-scale crawls
+
+***
+
+## 12. Configuration reference
+
+### Async: `AsyncConfluenceRateLimitConfig`
 
 <div align="center">⁂</div>
 
