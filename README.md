@@ -9,7 +9,15 @@ This repository provides an **async `aiohttp`‑based Confluence REST client** d
 - and structured logging for throttling and retry events.
 
 Atlassian’s Confluence Cloud REST API documents rate‑limiting headers such as `Retry‑After`, `X‑RateLimit‑Remaining`, and `X‑RateLimit‑FillRate`, and recommends that clients respond to backpressure instead of blindly retrying or firing requests into a throttled service. This library is built around that pattern, using `aiohttp` and `asyncio` to give you fine‑grained control over concurrency, pacing, and backoff.[^1][^2]
+**Status & Support**
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/async-confluence-client/tests.yml?branch=main&logo=github)](https://github.com/yourusername/async-confluence-client/actions)
+[![PyPI version](https://img.shields.io/pypi/v/async-confluence-client.svg?logo=pypi)](https://pypi.org/project/async-confluence-client/)
+[![async/await](https://img.shields.io/badge/async-await-green.svg)](https://docs.python.org/3/library/asyncio.html)
+[![aiohttp](https://img.shields.io/badge/built--with-aiohttp-blue.svg)](https://docs.aiohttp.org/)
+[![codecov](https://img.shields.io/codecov/c/github/yourusername/async-confluence-client?logo=codecov)](https://codecov.io/gh/yourusername/async-confluence-client)
 ***
 
 ## Table of contents
